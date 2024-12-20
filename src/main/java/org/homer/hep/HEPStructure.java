@@ -24,27 +24,41 @@
 
 package org.homer.hep;
 
+import lombok.Builder;
+import lombok.Value;
+
 import java.nio.ByteBuffer;
 
+@Builder
+@Value
 public class HEPStructure {
-		
-	public int ipFamily  = 0;
-	public int protocolId = 0;
-	public int sourcePort = 0;
-	public int destinationPort = 0;
-	public long timeSeconds = 0;
-	public long timeUseconds = 0;
-	public int protocolType = 0;
-	public int captureId = 0;
-	public String hepCorrelationID = null;
-	public String captureAuthUser = null;
-	public String sourceIPAddress = null;
-	public String destinationIPAddress = null;
-	public int uuid = 0;
-	public boolean authorized = false;	
-	public ByteBuffer payloadByteMessage = null;	
-	public long recievedTimestamp;
-	public String node;
+	
+	@Builder.Default
+	int ipFamily  = 0;
+	@Builder.Default
+	int protocolId = 0;
+	@Builder.Default
+	int sourcePort = 0;
+	@Builder.Default
+	int destinationPort = 0;
+	@Builder.Default
+	long timeSeconds = 0;
+	@Builder.Default
+	long timeUseconds = 0;
+	@Builder.Default
+	int protocolType = 0;
+	@Builder.Default
+	int captureId = 0;
+	@Builder.Default
+	String hepCorrelationID = null;
+	@Builder.Default
+	String captureAuthUser = null;
+	@Builder.Default
+	String sourceIPAddress = null;
+	@Builder.Default
+	String destinationIPAddress = null;
+	@Builder.Default
+	ByteBuffer payloadByteMessage = null;
 
 	@Override
     public String toString(){
@@ -62,11 +76,7 @@ public class HEPStructure {
                 .append(", captureAuthUser: " + captureAuthUser)
                 .append(", sourceIPAddress: " + sourceIPAddress)
                 .append(", destinationIPAddress: " + destinationIPAddress)
-                .append(", uuid: " + uuid)
-                .append(", authorized: " + authorized)
                 .append(", payloadByteMessage: " + payloadByteMessage)
-                .append(", recievedTimestamp: " + recievedTimestamp)
-                .append(", node: " + node)
                 .append("]");
 	    return sb.toString();
     }

@@ -22,42 +22,45 @@
  *
 */
 
+/*
+ * Changes (fixes) made by Vadim:
+ *  * Removed dead code (there was a lot of it)
+ *  * Added Slf4j logger
+ *  * Flip payload buffer after data was written to it
+ *  * Replaced old switch case with modern version
+ *  * Removed useless "source host" method argument
+ */
+
 package org.homer.hep;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
+@Slf4j
 public class ParserHEPv3 {
 
   	public static final int WIDTH = 4;
-	public static final int WIDTH_V6 = 128; // in bits
 
     /**
      * Method to parse out HEPStructure from input byte buffer.
      *
      * @param msg             payload bytes
      * @param totalLength     length of payload
-     * @param remoteIPAddress IP address of remote host
      * @return HEPStructure instance
-     * @throws Exception
+     * @throws Exception if failed to parse the HEP message
      */
-	public HEPStructure parse(ByteBuffer msg, int totalLength, String remoteIPAddress) throws Exception {
-
-        HEPStructure hepStruct = new HEPStructure();
+	public HEPStructure parse(ByteBuffer msg, int totalLength) throws Exception {
+		final var hepBuilder = HEPStructure.builder();
 		try {
-
 			int chunk_id = 0;
 			int chunk_type = 0;
 			int chunk_length = 0;
 			int i = 6;			
-
-
-			/* received time */
-			hepStruct.recievedTimestamp = hepStruct.timeSeconds * 1000000 + hepStruct.timeUseconds;			            
 
 			while (i < totalLength) {
 				chunk_id = msg.getShort();
@@ -65,12 +68,12 @@ public class ParserHEPv3 {
 				chunk_length = msg.getShort();
 				
 				if(chunk_length > totalLength) {
-					System.out.println("Corrupted HEP: CHUNK LENGHT couldnt be bigger as CHUNK_LENGHT");
+					log.error("Corrupted HEP: CHUNK LENGHT couldnt be bigger as CHUNK_LENGHT");
                     throw new IOException("Invalid HEP payload.");
 				}
 				
 				if(chunk_length == 0) {
-					System.out.println("Corrupted HEP: LENGTH couldn't be 0!");
+					log.error("Corrupted HEP: LENGTH couldn't be 0!");
                     throw new IOException("Invalid HEP payload.");
 				}
 
@@ -81,118 +84,84 @@ public class ParserHEPv3 {
 				}
 
 				switch (chunk_type) {
-
-				case 1:
-					hepStruct.ipFamily = msg.get();
-					break;
-
-				case 2:
-					hepStruct.protocolId = msg.get();
-					break;
-
-				case 3:
-					int src_ip4 = msg.getInt();
-					hepStruct.sourceIPAddress = IPtoString(src_ip4);					
-					break;
-
-				case 4:
-					int dst_ip4 = msg.getInt();
-					hepStruct.destinationIPAddress = IPtoString(dst_ip4);
-					break;
-
-				case 7:
-					hepStruct.sourcePort = (msg.getShort() & 0xffff);
-					break;
-
-				case 8:
-					hepStruct.destinationPort = (msg.getShort() & 0xffff);
-					break;
-
-				case 9:
-					hepStruct.timeSeconds = ((long) msg.getInt() & 0xffffffffL);
-					break;
-
-				case 10:
-					hepStruct.timeUseconds = ((long) msg.getInt() & 0xffffffffL);
-					break;
-
-				case 11:
-					hepStruct.protocolType = msg.get();
-					break;
-
-				case 12:
-					hepStruct.captureId = msg.getInt();
-					break;
-					
-				case 14:					
-					hepStruct.captureAuthUser = new String(msg.array(), msg.position(), (chunk_length - 6));					
-												
-					msg.position(msg.position() + chunk_length - 6);					
-					break;					
-
-				case 15:					
-					hepStruct.payloadByteMessage = ByteBuffer.allocate((chunk_length - 6));
-					hepStruct.payloadByteMessage.put(msg.array(), msg.position(), (chunk_length - 6));
-					msg.position(msg.position() + chunk_length -6 );					
-					break;
-					
-				case 16:																		
-					/* compressed payload */
-					hepStruct.payloadByteMessage = ByteBuffer.wrap(extractBytes(msg.array(), msg.position(), (chunk_length - 6)));
-					msg.position(msg.position() + chunk_length - 6);
-					break;	
-				
-				case 17:
-					hepStruct.hepCorrelationID = new String(msg.array(), msg.position(), (chunk_length - 6));
-					msg.position(msg.position() + chunk_length - 6);
-					break;	
-					
-				
-				default:
-					System.out.println("Unknown default chunk: ["+chunk_type+"]");
-					msg.position(msg.position() + chunk_length - 6);
-					break;
-				
+					case 1 -> hepBuilder.ipFamily(msg.get());
+					case 2 -> hepBuilder.protocolId(msg.get());
+					case 3 -> {
+						int src_ip4 = msg.getInt();
+						hepBuilder.sourceIPAddress(IPtoString(src_ip4));
+					}
+					case 4 -> {
+						int dst_ip4 = msg.getInt();
+						hepBuilder.destinationIPAddress(IPtoString(dst_ip4));
+					}
+					case 7 -> hepBuilder.sourcePort(Short.toUnsignedInt(msg.getShort()));
+					case 8 -> hepBuilder.destinationPort(Short.toUnsignedInt(msg.getShort()));
+					case 9 -> hepBuilder.timeSeconds(Integer.toUnsignedLong(msg.getInt()));
+					case 10 -> hepBuilder.timeUseconds(Integer.toUnsignedLong(msg.getInt()));
+					case 11 -> hepBuilder.protocolType(msg.get());
+					case 12 -> hepBuilder.captureId(msg.getInt());
+					case 14 -> {
+						hepBuilder.captureAuthUser(new String(msg.array(), msg.position(), (chunk_length - 6)));
+						msg.position(msg.position() + chunk_length - 6);
+					}
+					case 15 -> {
+						final var buffer = ByteBuffer.allocate((chunk_length - 6));
+						buffer.put(msg.array(), msg.position(), (chunk_length - 6));
+						buffer.flip();
+						hepBuilder.payloadByteMessage(buffer);
+						msg.position(msg.position() + chunk_length - 6);
+					}
+					case 16 -> {
+						/* compressed payload */
+						final var buffer = ByteBuffer.wrap(extractBytes(msg.array(), msg.position(), (chunk_length - 6)));
+						buffer.flip();
+						hepBuilder.payloadByteMessage(buffer);
+						msg.position(msg.position() + chunk_length - 6);
+					}
+					case 17 -> {
+						hepBuilder.hepCorrelationID(new String(msg.array(), msg.position(), (chunk_length - 6)));
+						msg.position(msg.position() + chunk_length - 6);
+					}
+					default -> {
+						log.error("Unknown default chunk: {}", chunk_type);
+						msg.position(msg.position() + chunk_length - 6);
+					}
 				}
-
 				i += chunk_length;
-								
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.out.println("Unable RUN WORKER");
+		} catch (final Exception e) {
+			log.error("Failed to parse HEP message", e);
 			throw e;
 		}
-		return hepStruct;
-    }	
-	
-    public static byte[] extractBytes(byte[] input, int position, int len) throws UnsupportedEncodingException, IOException, DataFormatException
-    {        
-
-    	Inflater decompress = new Inflater();
-    	
-        decompress.setInput(input, position, len);        
- 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream(len);
-        byte[] buff = new byte[1024];
-        while(!decompress.finished())
-        {
-            int count = decompress.inflate(buff);
-            baos.write(buff, 0, count);
-        }
-        baos.close();
-        byte[] output = baos.toByteArray(); 
-        return output;
+		return hepBuilder.build();
     }
-    
-     public static String IPtoString(int address) {
-            StringBuffer sa = new StringBuffer();
-            for (int i = 0; i < WIDTH; i++) {
-              sa.append(0xff & address >> 24);
-              address <<= 8;
-              if (i != WIDTH - 1)
-                sa.append(".");
-            }
-            return sa.toString();
-  }
+	
+	public static byte[] extractBytes(byte[] input, int position, int len) throws IOException, DataFormatException {
+		Inflater decompress = new Inflater();
+		
+		decompress.setInput(input, position, len);
+		
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(len);
+		byte[] buff = new byte[1024];
+		while(!decompress.finished())
+		{
+			int count = decompress.inflate(buff);
+			baos.write(buff, 0, count);
+		}
+		baos.close();
+		byte[] output = baos.toByteArray();
+		return output;
+	}
+	
+	public static String IPtoString(int address) {
+		StringBuffer sa = new StringBuffer();
+		for (int i = 0; i < WIDTH; i++) {
+			sa.append(0xff & address >> 24);
+			address <<= 8;
+			if (i != WIDTH - 1)
+				sa.append(".");
+		}
+		return sa.toString();
+	}
+ 
 }
