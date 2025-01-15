@@ -29,12 +29,18 @@ import lombok.Value;
 
 import java.nio.ByteBuffer;
 
+/**
+ * See documentation for the HEP protocol and meaning for all of those fields:
+ * <a href="https://github.com/sipcapture/HEP/blob/master/docs/HEP3_Network_Protocol_Specification_REV_36.pdf">HEP documentation</a>
+ */
 @Builder
 @Value
 public class HEPStructure {
 	
+	// IP protocol family
 	@Builder.Default
 	int ipFamily  = 0;
+	// IP protocol ID (tcp, udp, etc.)
 	@Builder.Default
 	int protocolId = 0;
 	@Builder.Default
@@ -45,6 +51,7 @@ public class HEPStructure {
 	long timeSeconds = 0;
 	@Builder.Default
 	long timeUseconds = 0;
+	// Protocol type (SIP/H323/RTP/MGCP etc.)
 	@Builder.Default
 	int protocolType = 0;
 	@Builder.Default
@@ -62,22 +69,20 @@ public class HEPStructure {
 
 	@Override
     public String toString(){
-	    StringBuilder sb = new StringBuilder();
-	    sb.append("HEPStructure[")
-                .append("ipFamily: " + ipFamily)
-                .append(", protcolId: " + protocolId)
-                .append(", sourcePort: " + sourcePort)
-                .append(", destinationPort: " + destinationPort)
-                .append(", timeSeconds: " + timeSeconds)
-                .append(", timeUseconds: " + timeUseconds)
-                .append(", protocolType: " + protocolType)
-                .append(", captureId: " + captureId)
-                .append(", hepCorrelationID: " + hepCorrelationID)
-                .append(", captureAuthUser: " + captureAuthUser)
-                .append(", sourceIPAddress: " + sourceIPAddress)
-                .append(", destinationIPAddress: " + destinationIPAddress)
-                .append(", payloadByteMessage: " + payloadByteMessage)
-                .append("]");
-	    return sb.toString();
+		return "HEPStructure[" +
+			"ipFamily: " + ipFamily +
+			", protcolId: " + protocolId +
+			", sourcePort: " + sourcePort +
+			", destinationPort: " + destinationPort +
+			", timeSeconds: " + timeSeconds +
+			", timeUseconds: " + timeUseconds +
+			", protocolType: " + protocolType +
+			", captureId: " + captureId +
+			", hepCorrelationID: " + hepCorrelationID +
+			", captureAuthUser: " + captureAuthUser +
+			", sourceIPAddress: " + sourceIPAddress +
+			", destinationIPAddress: " + destinationIPAddress +
+			", payloadByteMessage: " + payloadByteMessage +
+			"]";
     }
 }

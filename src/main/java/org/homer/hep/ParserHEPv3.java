@@ -37,6 +37,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
@@ -50,11 +52,17 @@ public class ParserHEPv3 {
      * Method to parse out HEPStructure from input byte buffer.
      *
      * @param msg             payload bytes
-     * @param totalLength     length of payload
      * @return HEPStructure instance
      * @throws Exception if failed to parse the HEP message
      */
-	public HEPStructure parse(ByteBuffer msg, int totalLength) throws Exception {
+	public HEPStructure parse(final ByteBuffer msg) throws Exception {
+		final var header = new byte[4];
+		msg.get(header); // read the header
+		if (!new String(header).equals("HEP3"))
+			throw new IOException("Message doesn't have 'HEP3' header");
+		
+		final var totalLength = Short.toUnsignedInt(msg.getShort());
+		
 		final var hepBuilder = HEPStructure.builder();
 		try {
 			int chunk_id = 0;
@@ -68,7 +76,7 @@ public class ParserHEPv3 {
 				chunk_length = msg.getShort();
 				
 				if(chunk_length > totalLength) {
-					log.error("Corrupted HEP: CHUNK LENGHT couldnt be bigger as CHUNK_LENGHT");
+					log.error("Corrupted HEP: CHUNK LENGTH couldn't be bigger as CHUNK_LENGTH");
                     throw new IOException("Invalid HEP payload.");
 				}
 				
@@ -86,14 +94,10 @@ public class ParserHEPv3 {
 				switch (chunk_type) {
 					case 1 -> hepBuilder.ipFamily(msg.get());
 					case 2 -> hepBuilder.protocolId(msg.get());
-					case 3 -> {
-						int src_ip4 = msg.getInt();
-						hepBuilder.sourceIPAddress(IPtoString(src_ip4));
-					}
-					case 4 -> {
-						int dst_ip4 = msg.getInt();
-						hepBuilder.destinationIPAddress(IPtoString(dst_ip4));
-					}
+					case 3 -> hepBuilder.sourceIPAddress(readIPv4(msg));
+					case 4 -> hepBuilder.destinationIPAddress(readIPv4(msg));
+					case 5 -> hepBuilder.sourceIPAddress(readIPv6(msg));
+					case 6 -> hepBuilder.destinationIPAddress(readIPv6(msg));
 					case 7 -> hepBuilder.sourcePort(Short.toUnsignedInt(msg.getShort()));
 					case 8 -> hepBuilder.destinationPort(Short.toUnsignedInt(msg.getShort()));
 					case 9 -> hepBuilder.timeSeconds(Integer.toUnsignedLong(msg.getInt()));
@@ -149,19 +153,19 @@ public class ParserHEPv3 {
 			baos.write(buff, 0, count);
 		}
 		baos.close();
-		byte[] output = baos.toByteArray();
-		return output;
+		return baos.toByteArray();
 	}
 	
-	public static String IPtoString(int address) {
-		StringBuffer sa = new StringBuffer();
-		for (int i = 0; i < WIDTH; i++) {
-			sa.append(0xff & address >> 24);
-			address <<= 8;
-			if (i != WIDTH - 1)
-				sa.append(".");
-		}
-		return sa.toString();
+	private String readIPv4(final ByteBuffer buffer) throws Exception {
+		final var address = new byte[4];
+		buffer.get(address);
+		return InetAddress.getByAddress(address).getHostAddress();
+	}
+	
+	private String readIPv6(final ByteBuffer buffer) throws Exception {
+		final var address = new byte[16];
+		buffer.get(address);
+		return Inet6Address.getByAddress(address).getHostAddress();
 	}
  
 }
